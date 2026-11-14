@@ -1,4 +1,4 @@
-# RuralCare SMS
+# TextBridge
 
 A text line that connects rural patients with community health workers. It works on any phone,
 flip phones included, so patients don't need home internet.

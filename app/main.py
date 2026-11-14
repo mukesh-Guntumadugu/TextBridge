@@ -14,7 +14,7 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(messag
 STATIC = Path(__file__).parent / "static"
 EMPTY_TWIML = '<?xml version="1.0" encoding="UTF-8"?><Response></Response>'
 
-app = FastAPI(title="RuralCare SMS")
+app = FastAPI(title="TextBridge")
 db.init()
 
 _basic = HTTPBasic(auto_error=False)

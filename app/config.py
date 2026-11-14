@@ -19,7 +19,7 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "").strip()
 TRIAGE_MODEL = os.getenv("TRIAGE_MODEL", "claude-haiku-5-5").strip()
 
 DASHBOARD_PASSWORD = os.getenv("DASHBOARD_PASSWORD", "").strip()
-DB_PATH = os.getenv("DB_PATH", "ruralcare.db")
+DB_PATH = os.getenv("DB_PATH", "textbridge.db")
 
 TWILIO_ENABLED = bool(TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN)
 DEV_SIMULATOR = (not TWILIO_ENABLED) or os.getenv("DEV_SIMULATOR", "") == "1"

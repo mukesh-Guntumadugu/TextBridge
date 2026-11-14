@@ -1,5 +1,5 @@
 [project]
-name = "ruralcare-sms"
+name = "textbridge"
 version = "0.1.0"
 description = "SMS relay between rural patients and community health workers"
 requires-python = ">=3.11"
