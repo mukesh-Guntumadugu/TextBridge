@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RuralCare – Health worker dashboard</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --ink:#1d2330; --mute:#6b7383; --line:#e3e6ec;
+          --em:#b42318; --hi:#c4570a; --med:#946200; --low:#3b6e3b; --brand:#1f5f8b; }
+  * { box-sizing:border-box; } body { margin:0; font:15px/1.45 system-ui,sans-serif; background:var(--bg); color:var(--ink); }
+  header { display:flex; align-items:center; gap:12px; padding:12px 20px; background:var(--brand); color:#fff; }
+  header h1 { font-size:17px; margin:0; } header .sp { flex:1 } header select { font:inherit; padding:4px 6px; border-radius:6px; border:0; }
+  main { display:grid; grid-template-columns:360px 1fr; height:calc(100vh - 50px); }
+  #list { overflow:auto; border-right:1px solid var(--line); background:var(--card); }
+  .case { padding:12px 16px; border-bottom:1px solid var(--line); cursor:pointer; }
+  .case:hover { background:#f1f4f8 } .case.sel { background:#e6eef6 }
+  .case .top { display:flex; gap:8px; align-items:center; font-weight:600; }
+  .case .msg { color:var(--mute); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px; }
+  .pill { font-size:11px; font-weight:700; text-transform:uppercase; padding:2px 7px; border-radius:99px; color:#fff; }
+  .emergency{background:var(--em)} .high{background:var(--hi)} .medium{background:var(--med)} .low{background:var(--low)}
+  .closed { opacity:.55 } .cat { font-weight:500; color:var(--mute); font-size:13px; }
+  #detail { display:flex; flex-direction:column; min-width:0; }
+  #head { padding:14px 20px; border-bottom:1px solid var(--line); background:var(--card); }
+  #head .sum { color:var(--mute); margin-top:4px; } #head button { float:right; }
+  #thread { flex:1; overflow:auto; padding:16px 20px; display:flex; flex-direction:column; gap:8px; }
+  .b { max-width:70%; padding:8px 12px; border-radius:14px; white-space:pre-wrap; }
+  .b small { display:block; font-size:11px; color:var(--mute); margin-top:3px; }
+  .patient { align-self:flex-start; background:#fff; border:1px solid var(--line); }
+  .chw, .dashboard { align-self:flex-end; background:#d7e7f5; }
+  .system { align-self:center; background:transparent; color:var(--mute); font-size:13px; text-align:center; }
+  form { display:flex; gap:8px; padding:12px 20px; border-top:1px solid var(--line); background:var(--card); }
+  textarea { flex:1; font:inherit; padding:8px 10px; border:1px solid var(--line); border-radius:8px; resize:none; height:44px; }
+  button { font:inherit; padding:8px 16px; border-radius:8px; border:0; background:var(--brand); color:#fff; cursor:pointer; }
+  button.ghost { background:#fff; color:var(--ink); border:1px solid var(--line); }
+  .empty { margin:auto; color:var(--mute); }
+</style>
+</head>
+<body>
+<header>
+  <h1>RuralCare text line</h1><span class="sp"></span>
+  <select id="filter"><option value="open">Open</option><option value="">All</option><option value="closed">Closed</option></select>
+</header>
+<main>
+  <div id="list"></div>
+  <div id="detail"><div class="empty">Pick a case</div></div>
+</main>
+<script>
+let selected = null, lastThread = "";
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const when = t => new Date(t * 1000).toLocaleString([], {month:"short", day:"numeric", hour:"numeric", minute:"2-digit"});
+const label = m => ({patient:"Patient", chw:"Health worker (text)", dashboard:"Health worker (dashboard)", system:"Auto"}[m.sender]);
+
+async function loadList() {
+  const r = await fetch("/api/cases" + ($("#filter").value ? "?status=" + $("#filter").value : ""));
+  const cases = await r.json();
+  $("#list").innerHTML = cases.map(c => `
+    <div class="case ${c.id === selected ? "sel" : ""} ${c.status}" data-id="${c.id}">
+      <div class="top">#${c.id} <span class="pill ${c.urgency}">${c.urgency}</span>
+        <span class="cat">${esc(c.category.replace("_", " "))}</span>
+        <span style="flex:1"></span><span class="cat">${esc(c.patient_phone)}</span></div>
+      <div class="msg">${esc(c.last_patient_message)}</div>
+    </div>`).join("") || '<div class="case"><div class="msg">No cases</div></div>';
+  document.querySelectorAll(".case[data-id]").forEach(el => el.onclick = () => { selected = +el.dataset.id; lastThread = ""; loadList(); loadCase(); });
+}
+
+async function loadCase() {
+  if (!selected) return;
+  const r = await fetch("/api/cases/" + selected);
+  if (!r.ok) return;
+  const { case: c, messages } = await r.json();
+  const key = JSON.stringify([c.status, c.assigned_chw, messages.length]);
+  if (key === lastThread) return;
+  lastThread = key;
+  const thread = messages.filter(m => !(m.sender === "system" && m.to_phone !== c.patient_phone));
+  $("#detail").innerHTML = `
+    <div id="head">${c.status === "open" ? '<button class="ghost" id="close">Close case</button>' : ""}
+      <b>#${c.id} · ${esc(c.patient_phone)}</b> <span class="pill ${c.urgency}">${c.urgency}</span>
+      <span class="cat">${esc(c.category.replace("_", " "))} · ${c.status}${c.assigned_chw ? " · worker " + esc(c.assigned_chw) : " · unclaimed"}</span>
+      <div class="sum">${esc(c.summary)}</div></div>
+    <div id="thread">${thread.map(m => `<div class="b ${m.sender}">${esc(m.sender === "chw" ? m.body.replace(/^\s*#\d+\s*/, "") : m.body)}<small>${label(m)} · ${when(m.created_at)}${m.channel === "failed" ? " · NOT SENT" : ""}</small></div>`).join("")}</div>
+    ${c.status === "open" ? '<form id="f"><textarea id="t" placeholder="Text the patient…"></textarea><button>Send</button></form>' : ""}`;
+  $("#thread").scrollTop = 1e9;
+  if ($("#f")) {
+    $("#t").onkeydown = e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("#f").requestSubmit(); } };
+    $("#f").onsubmit = async e => {
+      e.preventDefault(); const body = $("#t").value.trim(); if (!body) return;
+      await fetch(`/api/cases/${c.id}/reply`, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({body})});
+      lastThread = ""; loadCase(); loadList();
+    };
+  }
+  if ($("#close")) $("#close").onclick = async () => { await fetch(`/api/cases/${c.id}/close`, {method:"POST"}); lastThread = ""; loadCase(); loadList(); };
+}
+
+$("#filter").onchange = loadList;
+loadList(); setInterval(() => { loadList(); loadCase(); }, 2000);
+</script>
+</body>
+</html>

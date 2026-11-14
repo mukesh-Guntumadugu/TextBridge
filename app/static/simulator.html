@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RuralCare – Phone simulator</title>
+<style>
+  body { margin:0; font:15px/1.4 system-ui,sans-serif; background:#e9ecf1; color:#1d2330; }
+  header { padding:12px 20px; background:#1d2330; color:#fff; display:flex; gap:16px; align-items:center; }
+  header a { color:#9cc7ea; } header h1 { font-size:16px; margin:0; flex:1; }
+  .phones { display:flex; gap:28px; justify-content:center; padding:24px; flex-wrap:wrap; }
+  .phone { width:340px; height:620px; background:#fff; border-radius:28px; box-shadow:0 6px 24px #0002; display:flex; flex-direction:column; overflow:hidden; border:8px solid #1d2330; }
+  .ph { padding:10px 14px; background:#f3f4f7; border-bottom:1px solid #dde1e8; }
+  .ph b { display:block; } .ph input { font:inherit; width:100%; margin-top:4px; padding:4px 6px; border:1px solid #ccd2db; border-radius:6px; }
+  .msgs { flex:1; overflow:auto; padding:12px; display:flex; flex-direction:column; gap:6px; }
+  .m { max-width:80%; padding:7px 11px; border-radius:16px; white-space:pre-wrap; font-size:14px; }
+  .in { align-self:flex-start; background:#e7e9ee; } .out { align-self:flex-end; background:#2f7cf6; color:#fff; }
+  form { display:flex; gap:6px; padding:8px; border-top:1px solid #dde1e8; }
+  form input { flex:1; font:inherit; padding:8px 12px; border-radius:18px; border:1px solid #ccd2db; }
+  form button { border:0; background:#2f7cf6; color:#fff; border-radius:18px; padding:0 14px; font:inherit; cursor:pointer; }
+  .note { text-align:center; color:#6b7383; font-size:13px; padding:0 20px 20px; }
+</style>
+</head>
+<body>
+<header><h1>Phone simulator (dev mode, no real texts are sent)</h1><a href="/dashboard" target="_blank">Open dashboard ↗</a></header>
+<div class="phones">
+  <div class="phone" id="patient"><div class="ph"><b>Patient's phone</b><input class="num" value="+17405551234"></div><div class="msgs"></div><form><input placeholder="Text the clinic number…"><button>Send</button></form></div>
+  <div class="phone" id="chw"><div class="ph"><b>Health worker's phone</b><input class="num" readonly></div><div class="msgs"></div><form><input placeholder="#1 your reply…"><button>Send</button></form></div>
+</div>
+<p class="note">Both phones text the clinic number <b id="clinic"></b>. The worker answers with <code>#case message</code>, <code>#case close</code> or <code>LIST</code>.</p>
+<script>
+const esc = s => String(s ?? "").replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+const phones = ["patient", "chw"].map(id => {
+  const el = document.getElementById(id);
+  const p = { el, num: el.querySelector(".num"), box: el.querySelector(".msgs"), key: "" };
+  el.querySelector("form").onsubmit = async e => {
+    e.preventDefault(); const inp = e.target.querySelector("input"); const body = inp.value.trim(); if (!body) return;
+    inp.value = "";
+    await fetch("/dev/text", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({from_phone:p.num.value.trim(), body})});
+    poll();
+  };
+  p.num.onchange = () => { p.key = ""; poll(); };
+  return p;
+});
+async function poll() {
+  for (const p of phones) {
+    const num = p.num.value.trim(); if (!num) continue;
+    const msgs = await (await fetch("/dev/phone/" + encodeURIComponent(num))).json();
+    const key = num + msgs.length; if (key === p.key) continue; p.key = key;
+    p.box.innerHTML = msgs.map(m => `<div class="m ${m.from_phone === num ? "out" : "in"}">${esc(m.body)}</div>`).join("");
+    p.box.scrollTop = 1e9;
+  }
+}
+fetch("/dev/config").then(r => r.json()).then(c => {
+  phones[1].num.value = c.chws[0]; document.getElementById("clinic").textContent = c.clinic; poll();
+});
+setInterval(poll, 1500);
+</script>
+</body>
+</html>
